@@ -1,0 +1,34 @@
+# xdbg_mcp - Windows 机上的 x64dbg + MCP 调试器通道
+# 用途：动态调试（逆向分析、通用 Windows 动态调试）
+# 部署机：任意一台 Windows 机（通过 SSH 管理）
+# 性质：轻量子项目（无常驻 Linux 进程、无 venv、不注册 supervisor unit）
+#
+# 部署前置：
+#   1. Windows 机装 x64dbg（默认目录 C:\x64dbg\release\x64\）
+#   2. 装 x64dbg-MCP-Server 插件（.dp64），生成 mcp_config.json（含 AuthToken）
+#   3. 从 Linux 机 SSH 可达该 Windows 机（端口/账号自配）
+
+deploy:
+  win_ssh: "ssh -i <你的ssh私钥> -p <ssh端口> -o StrictHostKeyChecking=no <ssh用户>@<Windows机IP>"
+  x64dbg_home: "C:\\x64dbg\\release\\x64\\"        # x64dbg.exe 所在目录（db 文件同目录）
+  plugin: "C:\\x64dbg\\release\\x64\\plugins\\x64dbg-MCP-Server.dp64"
+  mcp_config: "C:\\x64dbg\\release\\x64\\mcp_config.json"   # 含 AuthToken，每次调用前读
+  mcp_bind: "127.0.0.1:9094"
+  mcp_helper: "C:\\scripts\\xdbg_mcp.ps1"          # 调用助手（自动读 token，k=v 传参）
+  launch_task: "XdbgMcp"                            # 计划任务：把 GUI 拉进 console session 启动
+
+access:
+  # 从 Linux 机直连（SSH 端口转发）
+  tunnel: "ssh -f -i <你的ssh私钥> -p <ssh端口> -N -L 19094:127.0.0.1:9094 <ssh用户>@<Windows机IP>"
+  local_endpoint: "http://127.0.0.1:19094/"
+  token_source: "Windows 机 mcp_config.json 的 AuthToken 字段"
+
+deployment_notes:
+  - "x64dbg 2026.05.27 + MCP server v1.2（80 工具）实测可用"
+  - "notepad 冒烟：AttachProcess/PauseDebug/WaitForPause/Disassemble/StopDebug 全通"
+  - "Linux SSH -L 隧道直调 MCP 通"
+
+critical_caveat: >
+  x64dbg 没有 detach：MCP 的 StopDebug 会【杀死被调试进程】。
+  attach 长驻进程（微信等）时动作要快（attach→pause→读→stop 全程 <1 分钟），
+  且接受"读完必重启进程+重新登录"的代价；或者只 attach 短命/可重启目标。
